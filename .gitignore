@@ -1,0 +1,34 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Flask & Venv
+instance/
+.env
+*.env
+venv/
+ENV/
+env/
+.venv/
+
+# Virtual env
+classroom/
+.env
+*.env
+__pycache__/
+*.pyc
+
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# Mac / Windows
+.DS_Store
+Thumbs.db
+
+bcrypt_passwords.txt
