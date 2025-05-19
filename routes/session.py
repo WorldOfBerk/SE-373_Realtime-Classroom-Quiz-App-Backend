@@ -80,3 +80,55 @@ def join_session():
     finally:
         cursor.close()
         conn.close()
+
+
+@session_bp.route('/api/session/toggle', methods=['POST'])
+def toggle_session_active():
+    data = request.get_json()
+    session_id = data.get("session_id")
+
+    if not session_id:
+        return jsonify({"error": "Missing session_id"}), 400
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Toggle işleminde mevcut değeri tersine çeviriyoruz
+        cursor.execute("UPDATE sessions SET is_active = NOT is_active WHERE id = %s", (session_id,))
+        conn.commit()
+        return jsonify({"message": "Session active status updated"}), 200
+
+    except Exception as e:
+        print("⚠️ SESSION TOGGLE HATA:", e)
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@session_bp.route('/api/session/created', methods=['POST'])
+def get_teacher_sessions():
+    data = request.get_json()
+    teacher_id = data.get("teacher_id")
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("""
+            SELECT id, title, is_active, created_at
+            FROM sessions
+            WHERE teacher_id = %s
+            ORDER BY created_at DESC
+        """, (teacher_id,))
+        sessions = cursor.fetchall()
+        return jsonify(sessions), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        cursor.close()
+        conn.close()

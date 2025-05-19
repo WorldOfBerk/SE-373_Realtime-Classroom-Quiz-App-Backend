@@ -91,9 +91,12 @@ def submit_answer():
         conn = get_db_connection()
         cursor = conn.cursor()
 
+        cursor.execute("SELECT 1 FROM quiz_answers WHERE quiz_id = %s AND student_id = %s", (quiz_id, student_id))
+        if cursor.fetchone():
+            return jsonify({"message": "You already answered this quiz"}), 409
+
         cursor.execute("SELECT correct_option FROM quizzes WHERE id = %s", (quiz_id,))
         result = cursor.fetchone()
-
         if not result:
             return jsonify({"error": "Quiz bulunamadı"}), 404
 
@@ -105,6 +108,9 @@ def submit_answer():
             VALUES (%s, %s, %s, %s)
         """, (quiz_id, student_id, selected_option, is_correct))
 
+        if is_correct:
+            cursor.execute("UPDATE students SET points = points + 5 WHERE id = %s", (student_id,))
+
         conn.commit()
 
         return jsonify({
@@ -113,7 +119,7 @@ def submit_answer():
         }), 200
 
     except Exception as e:
-        print("⚠️ HATA:", e) 
+        print("⚠️ HATA:", e)
         return jsonify({"error": str(e)}), 500
 
     finally:
@@ -122,6 +128,7 @@ def submit_answer():
             conn.close()
         except:
             pass
+
 
 @quiz_bp.route('/api/quiz/multi', methods=['POST'])
 def create_multiple_quizzes():
@@ -207,22 +214,81 @@ def get_created_quizzes():
         cursor.close()
         conn.close()
 
-@quiz_bp.route('/api/quiz/toggle', methods=['POST'])
-def toggle_quiz_active():
+@quiz_bp.route("/api/session/toggle", methods=["POST"])
+def toggle_session_status():
     data = request.get_json()
-    quiz_id = data.get('quiz_id')
+    session_id = data.get("session_id")
+    is_active = data.get("is_active")
 
-    if not quiz_id:
-        return jsonify({"error": "quiz_id is required"}), 400
+    if session_id is None or is_active is None:
+        return jsonify({"error": "session_id and is_active required"}), 400
 
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-
-    
-        cursor.execute("UPDATE quizzes SET is_active = NOT is_active WHERE id = %s", (quiz_id,))
+        cursor.execute("UPDATE sessions SET is_active = %s WHERE id = %s", (is_active, session_id))
         conn.commit()
-        return jsonify({"message": "Quiz active status toggled"}), 200
+        return jsonify({"message": f"Session {session_id} updated"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+
+
+@quiz_bp.route('/api/quiz/active_all', methods=['POST'])
+def get_all_active_quizzes():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("""
+            SELECT q.id, q.session_id, q.question, q.type, q.options
+            FROM quizzes q
+            JOIN sessions s ON q.session_id = s.id
+            WHERE s.is_active = TRUE
+            ORDER BY q.created_at
+
+        """)
+        quizzes = cursor.fetchall()
+
+        for q in quizzes:
+            q["options"] = json.loads(q["options"])
+
+        return jsonify(quizzes), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        cursor.close()
+        conn.close()
+
+@quiz_bp.route('/api/quiz/session/active', methods=['POST'])
+def get_all_active_quizzes_by_session():
+    data = request.get_json()
+    session_id = data.get('session_id')
+
+    if not session_id:
+        return jsonify({"error": "session_id is required"}), 400
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("""
+            SELECT id, question, type, options
+            FROM quizzes
+            WHERE session_id = %s
+            ORDER BY created_at ASC
+        """, (session_id,))
+        quizzes = cursor.fetchall()
+
+        for quiz in quizzes:
+            quiz["options"] = json.loads(quiz["options"])
+
+        return jsonify(quizzes), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
